@@ -8,6 +8,7 @@ import re
 import os
 import time
 import logging
+import urllib2
 
 try:
 	from netaddr import *
@@ -28,10 +29,10 @@ except ImportError:
 	sys.exit(1)
 
 # Usage: netdiscover [-i device] [-r range | -l file | -p] [-s time] [-n node] [-c count] [-f] [-d] [-S] [-P] [-C]
-# x  -i device: your network device
-# x  -r range: scan a given range instead of auto scan. 192.168.6.0/24,/16,/8
-#   -l file: scan the list of ranges contained into the given file
-#   -p passive mode: do not send anything, only sniff
+# x -i device: your network device
+# x -r range: scan a given range instead of auto scan. 192.168.6.0/24,/16,/8
+# x -l file: scan the list of ranges contained into the given file
+# x -p passive mode: do not send anything, only sniff
 # x -F filter: Customize pcap filter expression (default: "arp")
 # x -s time: time to sleep between each arp request (miliseconds)
 #   -n node: last ip octet used for scanning (from 2 to 253)
@@ -53,6 +54,7 @@ group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('-r', '--range', nargs='?', type=str, help='scan a given range')
 group.add_argument('-l', '--file', nargs='?', type=str, help='scan the list of ranges contained into the given file')
 group.add_argument('-p', '--passive', help='do not send anything, only sniff', action='store_true')
+group.add_argument('-d', '--download', help='download oui.txt', action='store_true')
 
 parser.add_argument('-F', '--filter', nargs='?', type=str, help='Customize pcap filter expression (default: "arp")', default='arp')
 parser.add_argument('-c', '--count', nargs='?', type=int, help='number of times to send each arp request (for nets with packet loss)', default=0)
@@ -66,9 +68,41 @@ if os.geteuid() != 0:
 
 conf.iface=args.iface
 conf.verb=0
-args.range = "10.1.1.0/24"
+#args.range = "10.1.1.0/24"
 
 #os.system(CLEAR)
+
+def downloadoui():
+	try:
+		output = open("oui.txt", "w")
+		url = "http://standards.ieee.org/develop/regauth/oui/oui.txt"
+		u = urllib2.urlopen(url)
+		meta = u.info()
+		file_size = int(meta.getheaders("Content-Length")[0])
+		print "Downloading: %s Bytes: %s" % ("oui.txt", file_size)
+		file_size_dl = 0
+		block_sz = 8192
+		while True:
+			buffer = u.read(block_sz)
+			if not buffer:
+				break
+			file_size_dl += len(buffer)
+			output.write(buffer)
+			status = r"%10d  [%3.2f%%]" % (file_size_dl, file_size_dl * 100. / file_size)
+			status = status + chr(8)*(len(status)+1)
+			print status,
+		output.close()
+		print "oui.txt downloaded with success"
+		sys.exit(0)
+	except IOError:
+		print "Error while writing oui.txt"
+		sys.exit(-1)
+	except urllib2.HTTPError:
+		print "Failed to get oui.txt"
+		sys.exit(-1)
+	else:
+		print "Failing, hard."
+		sys.exit(-1)
 
 def getConstructor(mac, oui):
 	constructor = ""
@@ -91,17 +125,32 @@ def signal_handler(signal, frame):
 	print "\nExiting... Elapsed : %d seconds" % (end_time-start_time)
 	sys.exit(0)
 
+if args.download:
+	downloadoui()
+
 signal.signal(signal.SIGINT, signal_handler)
 
 start_time = time.time()
-packets = [ Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst="%s" % i) for i in IPNetwork(args.range).iter_hosts() ]
-
-ans, unans = srp(packets, timeout=2, retry=args.count)
-
 machines = {}
-for pkt in ans:
-	pkt = pkt[1][ARP]
-	machines[pkt.psrc] = pkt.hwsrc
+
+if args.file:
+	try:
+		f = open(args.file)
+	except IOError:
+		print "File not available"
+		sys.exit(-1)
+	content = f.read().split('\n')
+	iplist = filter(None, content)
+	iprange = [ ip.strip() for ip in iplist ]
+else:
+	iprange = IPNetwork(args.range).iter_hosts()
+
+if not args.passive :
+	packets = [ Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst="%s" % i) for i in iprange ]
+	ans, unans = srp(packets, timeout=2, retry=args.count)
+	for pkt in ans:
+		pkt = pkt[1][ARP]
+		machines[pkt.psrc] = pkt.hwsrc
 
 ouilist = True
 try: 
