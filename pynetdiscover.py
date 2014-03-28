@@ -10,24 +10,18 @@ import time
 import logging
 import urllib2
 
-try:
+try: # alien packages
 	from netaddr import *
-except ImportError:
-	print 'netaddr package is missing: pip install netaddr or aptitude install python-netaddr'
-	sys.exit(1)
-try:
 	import logging
 	logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 	from scapy.all import srp,conf,ARP,Ether,sniff
-except ImportError:
-	print 'scapy package is missing: pip install scapy or aptitude install python-scapy'
-	sys.exit(1)
-try:
 	import argparse
-except ImportError:
-	print 'argparse package is missing: pip install argparse or aptitude install python-argparse'
+except ImportError, e:
+	package = e.message.split(" ")[-1]
+	print '%s package is missing: pip install %s or aptitude install python-%s' % (package, package, package)
 	sys.exit(1)
 
+# from netdiscover :
 # Usage: netdiscover [-i device] [-r range | -l file | -p] [-s time] [-n node] [-c count] [-f] [-d] [-S] [-P] [-C]
 # x -i device: your network device
 # x -r range: scan a given range instead of auto scan. 192.168.6.0/24,/16,/8
@@ -68,7 +62,6 @@ if os.geteuid() != 0:
 
 conf.iface=args.iface
 conf.verb=0
-#args.range = "10.1.1.0/24"
 
 #os.system(CLEAR)
 
