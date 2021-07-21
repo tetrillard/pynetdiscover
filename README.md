@@ -3,7 +3,7 @@ pynetdiscover
 
 pyNetdiscover is an active/passive address reconnaissance tool, ARP Scanner.
 
-Inspired by the C tool Netdiscover http://nixgeneration.com/~jaime/netdiscover/
+Inspired by the C tool Netdiscover http://web.archive.org/web/*/http://nixgeneration.com/~jaime/netdiscover
 
 I was lazy to recompile netdiscover with an updated OUI list so I decided to
 play with python and scapy.
